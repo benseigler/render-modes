@@ -1,0 +1,249 @@
+/*!
+Implementation of xpans' Headphones rendering mode
+*/
+pub mod distance;
+pub mod pan_law;
+
+use crate::distance::{DistanceCurve, normalize_distance};
+use crate::pan_law::PanLaw;
+use core::marker::PhantomData;
+use nalgebra::{SimdRealField, Vector3};
+use num::{Float, FromPrimitive, cast::AsPrimitive};
+use xpans::{Extent, Position};
+use xpans_common_lr::{FlipSign, gain};
+use xpans_render::input::SampleRate;
+use xpans_render::prelude::*;
+
+/// The source interpreter for the headphone rendering mode.
+#[derive(Default)]
+pub struct Interpreter<T> {
+    phantom_data: PhantomData<T>,
+}
+impl<T> Interpreter<T> {
+    pub fn new() -> Self {
+        Self {
+            phantom_data: PhantomData,
+        }
+    }
+}
+
+/// The sample processor for the headphone rendering mode.
+#[derive(Default)]
+pub struct Processor<T, Law, D> {
+    max_itd_nanos: u32,
+    distance_curve: D,
+    distance_effect: T,
+    min_distance: T,
+    max_distance: T,
+    pan_law: Law,
+}
+impl<T: Float, Law, D: DistanceCurve<T>> Processor<T, Law, D> {
+    /// Creates a new headphone sample processor.
+    pub fn new(
+        pan_law: Law,
+        max_itd_nanos: u32,
+        distance_curve: D,
+        distance_effect: T,
+        min_distance: T,
+        max_distance: T,
+    ) -> Self {
+        Self {
+            pan_law,
+            max_itd_nanos,
+            distance_curve,
+            distance_effect,
+            min_distance,
+            max_distance,
+        }
+    }
+    pub fn pan_law(&self) -> &Law {
+        &self.pan_law
+    }
+    pub fn set_pan_law(&mut self, pan_law: Law) {
+        self.pan_law = pan_law
+    }
+    pub fn max_itd_nanos(&self) -> u32 {
+        self.max_itd_nanos
+    }
+    pub fn set_max_itd_nanos(&mut self, max_itd_nanos: u32) {
+        self.max_itd_nanos = max_itd_nanos
+    }
+    pub fn distance_effect(&self) -> T {
+        self.distance_effect
+    }
+    pub fn set_distance_effect(&mut self, distance_effect: T) {
+        self.distance_effect = distance_effect
+    }
+    pub fn min_distance(&self) -> T {
+        self.min_distance
+    }
+    pub fn set_min_distance(&mut self, min_distance: T) {
+        self.min_distance = min_distance;
+    }
+    pub fn max_distance(&self) -> T {
+        self.max_distance
+    }
+    pub fn set_max_distance(&mut self, max_distance: T) {
+        self.max_distance = max_distance;
+    }
+    pub fn distance_curve(&self) -> &D {
+        &self.distance_curve
+    }
+    pub fn set_distance_curve(&mut self, distance_curve: D) {
+        self.distance_curve = distance_curve;
+    }
+    fn normalize_distance(&self, distance: T) -> T {
+        normalize_distance(self.min_distance, self.max_distance, distance)
+    }
+    fn apply_distance_curve(&self, distance: T) -> T {
+        self.distance_curve.distance_curve(distance)
+    }
+}
+
+/// The interpretation type for the headphone rendering mode.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Interpretation<T> {
+    lr: T,
+    bf: T,
+    du: T,
+    distance: T,
+}
+
+impl<T> Interpretation<T> {
+    pub fn lr(&self) -> &T {
+        &self.lr
+    }
+
+    pub fn bf(&self) -> &T {
+        &self.bf
+    }
+
+    pub fn du(&self) -> &T {
+        &self.du
+    }
+
+    pub fn distance(&self) -> &T {
+        &self.distance
+    }
+}
+
+impl<T> InterpretationLength for Interpreter<T> {
+    fn interpretation_length(&self) -> usize {
+        1
+    }
+}
+
+impl<Source, T> InterpretSource<Source> for Interpreter<T>
+where
+    Source: Position<T> + Extent<T>,
+    T: SimdRealField + Copy + From<f32>,
+{
+    type Interpretation = Interpretation<T>;
+
+    fn interpret_source(&self, source: &Source, result: &mut [Self::Interpretation]) {
+        let position = Vector3::new(source.pos_x(), source.pos_y(), source.pos_z());
+        let extent = Vector3::new(source.ext_x(), source.ext_y(), source.ext_z());
+
+        let divergence = cuboid_solve(position, extent);
+        let pos_norm = position.normalize();
+        let converged_balances = pos_norm.component_mul(&divergence);
+        result[0].lr = converged_balances.x;
+        result[0].bf = converged_balances.y;
+        result[0].du = converged_balances.z;
+        let distance = position.magnitude();
+        result[0].distance = distance;
+    }
+}
+
+fn simd_abs<T: SimdRealField>(value: Vector3<T>) -> Vector3<T> {
+    let mut result = Vector3::zeros();
+    for (a, b) in result.iter_mut().zip(value.iter()) {
+        *a = b.simd_abs();
+    }
+    result
+}
+impl<T, Law, D> DelaySamples for Processor<T, Law, D> {
+    fn delay_samples(&self, sample_rate: u32) -> usize {
+        calculate_delay_samples(self.max_itd_nanos, sample_rate)
+    }
+}
+impl<T, Law, D> OutputChannels for Processor<T, Law, D> {
+    fn output_channels(&self) -> usize {
+        2
+    }
+}
+
+impl<T, Law, In, Out, D> ProcessSamples<In, Out> for Processor<T, Law, D>
+where
+    Law: PanLaw<T>,
+    In: FractionalInput<T, T> + SampleRate,
+    Out: Output<T>,
+    T: Float + FlipSign + FromPrimitive + 'static,
+    u32: AsPrimitive<T>,
+    D: DistanceCurve<T>,
+{
+    type Interpretation = Interpretation<T>;
+
+    fn process_samples(&self, result: &[Interpretation<T>], input: &In, output: &mut Out) {
+        let result = result[0];
+        let current_sample = input.current_sample();
+        let max_itd: T = self.max_itd_nanos().as_();
+        let delay_ns = (result.lr * max_itd).abs();
+        let sample_rate = input.sample_rate();
+        let delay_samples = nanos_to_samples(delay_ns, sample_rate);
+        let delayed_sample = input.fractional_sample(delay_samples);
+        let sample_pair = [current_sample, delayed_sample];
+        for channel in 0u8..2 {
+            let is_delayed_channel = (channel == 0) == result.lr.is_sign_positive();
+            let sample = sample_pair[is_delayed_channel as usize];
+            let distance = self.normalize_distance(result.distance);
+            let dm = self.apply_distance_curve(distance) * self.distance_effect();
+            let divergence = T::one() - dm;
+            let gain: T = gain(channel, result.lr * divergence);
+            let gain_attenuated = self.pan_law.attenuate(gain);
+            output.set_channel(usize::from(channel), sample * gain_attenuated);
+        }
+    }
+}
+
+fn cuboid_solve<T: SimdRealField + Copy>(position: Vector3<T>, extent: Vector3<T>) -> Vector3<T> {
+    let position_abs = simd_abs(position);
+    let mut plus = position_abs + extent;
+    for i in plus.iter_mut() {
+        i.simd_max(T::zero());
+    }
+    let plus = simd_abs(plus.normalize());
+    let mut minus = position_abs - extent;
+    for i in minus.iter_mut() {
+        i.simd_max(T::zero());
+    }
+    let minus = simd_abs(minus.normalize());
+    let mut divergence = Vector3::zeros();
+    for ((plus, minus), d) in plus.iter().zip(minus.iter()).zip(divergence.iter_mut()) {
+        *d = plus.simd_min(*minus);
+    }
+    divergence
+}
+
+const NANOS_PER_SEC: u32 = 1_000_000_000;
+
+fn nanos_to_samples<T>(nanos: T, sample_rate: u32) -> T
+where
+    T: Float + 'static,
+    u32: AsPrimitive<T>,
+{
+    (nanos * sample_rate.as_()) / (NANOS_PER_SEC.as_())
+}
+
+fn nanos_to_samples_int(nanos: u32, sample_rate: u32) -> usize {
+    let nanos = u64::from(nanos);
+    let sample_rate = u64::from(sample_rate);
+    let samples = (nanos * sample_rate) / 1_000_000_000;
+    (samples as usize).saturating_add(1)
+}
+
+/// Returns the number of buffered samples required for the given maximum ITD
+/// and sample rate.
+pub fn calculate_delay_samples(max_itd_nanos: u32, sample_rate: u32) -> usize {
+    nanos_to_samples_int(max_itd_nanos, sample_rate)
+}

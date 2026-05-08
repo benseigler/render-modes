@@ -1,0 +1,17 @@
+[package]
+name = "xpans_headphones"
+version = "0.1.1"
+edition = "2024"
+description = "Implementation of xpans' Headphones rendering mode"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/xpans-audio/render-modes.git"
+authors = ["Ben Seigler"]
+
+[dependencies]
+xpans = "0.1.0"
+xpans_render = "0.1.0"
+xpans_common_lr = { version = "0.1.1", path = "../common/lr" }
+nalgebra = "0.34.0"
+simba = { version = "0.9.1", features = ["wide"] }
+num = "0.4.3"

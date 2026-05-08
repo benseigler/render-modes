@@ -1,0 +1,12 @@
+[package]
+name = "xpans_mono"
+version = "0.1.1"
+edition = "2024"
+description = "Implementation of xpans' Mono rendering mode"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/xpans-audio/render-modes.git"
+authors = ["Ben Seigler"]
+
+[dependencies]
+xpans_render = "0.1.0"
