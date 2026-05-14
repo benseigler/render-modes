@@ -2,7 +2,7 @@
 Shared traits and functions between Stereo and Headphones
 rendering modes in the xpans Ecosystem
 */
-use num::{traits::FloatConst, Float, FromPrimitive};
+use num::{Float, FromPrimitive, traits::FloatConst};
 
 /// -3 dB center attenuation with a square root taper
 #[derive(Debug, Default)]
@@ -116,8 +116,56 @@ fn flip_sign_works() {
 
     assert_eq!(f32::flip_sign(true, v), -v);
     assert_eq!(f32::flip_sign(false, v), v);
+    assert_eq!(f32::flip_sign(true, -v), v);
+    assert_eq!(f32::flip_sign(false, -v), -v);
 
     let v = 1.;
     assert_eq!(f64::flip_sign(true, v), -v);
     assert_eq!(f64::flip_sign(false, v), v);
+    assert_eq!(f64::flip_sign(true, -v), v);
+    assert_eq!(f64::flip_sign(false, -v), -v);
+}
+
+#[cfg(test)]
+#[test]
+fn gain_center() {
+    test_gain_both_sides(0., [0.5, 0.5]);
+}
+
+#[cfg(test)]
+#[test]
+fn gain_sides() {
+    test_gain_both_sides(-1., [1.0, 0.0]);
+}
+
+#[cfg(test)]
+#[test]
+fn gain_half_sides() {
+    test_gain(-0.5, [0.75, 0.25]);
+}
+
+#[cfg(test)]
+fn test_gain<T>(lr: T, desired_gains: [T; 2])
+where
+    T: std::fmt::Debug + FlipSign + Float + FromPrimitive,
+{
+    let mut gains = [T::zero(); 2];
+    for channel in 0u8..2 {
+        gains[channel as usize] = gain(channel, lr);
+    }
+    for i in 0..2 {
+        assert_eq!(gains[i], desired_gains[i]);
+    }
+}
+
+#[cfg(test)]
+fn test_gain_both_sides<T>(lr: T, desired_gains: [T; 2])
+where
+    T: std::fmt::Debug + FlipSign + Float + FromPrimitive,
+{
+    let mut reversed = desired_gains.clone();
+    reversed.reverse();
+
+    test_gain(lr, desired_gains);
+    test_gain(-lr, reversed);
 }
