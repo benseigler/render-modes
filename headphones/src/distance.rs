@@ -74,3 +74,24 @@ pub(crate) fn normalize_distance<T: Float>(min_distance: T, max_distance: T, dis
     let result = (min / v).clamp(T::zero(), T::one());
     result
 }
+
+#[cfg(test)]
+#[test]
+fn normalize_half() {
+    let normalized = normalize_distance(0.1, 1.1, 0.6);
+    assert_eq!(normalized, 0.5);
+}
+
+#[cfg(test)]
+#[test]
+fn normalize_far() {
+    let normalized = normalize_distance(0.1, 1.1, 2.0);
+    assert_eq!(normalized, 1.0);
+}
+
+#[cfg(test)]
+#[test]
+fn normalize_near() {
+    let normalized = normalize_distance(0.1, 1.1, 0.05);
+    assert_eq!(normalized, 0.0);
+}
