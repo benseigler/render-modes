@@ -73,7 +73,7 @@ where
         let position = Vector3::new(source.pos_x(), source.pos_y(), source.pos_z());
         let extent = Vector3::new(source.ext_x(), source.ext_y(), source.ext_z());
         let divergence = directional_cuboid_solve(position, extent);
-        let mut pos_norm = position.clone();
+        let mut pos_norm = position;
         pos_norm.normalize_mut();
         let converged_balance = pos_norm.x * divergence.x;
         result[0] = converged_balance;

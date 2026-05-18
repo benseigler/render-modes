@@ -86,8 +86,8 @@ where
 {
     let should_flip = channel == 0;
     let lr = T::flip_sign(should_flip, lr);
-    let gain = (lr + T::one()) / T::from_f64(2.).unwrap();
-    gain
+
+    (lr + T::one()) / T::from_f64(2.).unwrap()
 }
 
 /// Conditionally negates the provided value.

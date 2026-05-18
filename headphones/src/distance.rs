@@ -71,8 +71,8 @@ pub(crate) fn normalize_distance<T: Float>(min_distance: T, max_distance: T, dis
     }
     let v = max_distance - min_distance;
     let min = distance - min_distance;
-    let result = (min / v).clamp(T::zero(), T::one());
-    result
+
+    (min / v).clamp(T::zero(), T::one())
 }
 
 #[cfg(test)]
