@@ -142,26 +142,23 @@ where
 
     fn interpret_source(&self, source: &Source, result: &mut [Self::Interpretation]) {
         let position = Vector3::new(source.pos_x(), source.pos_y(), source.pos_z());
-        let extent = Vector3::new(source.ext_x(), source.ext_y(), source.ext_z());
 
-        let divergence = cuboid_solve(position, extent);
         let pos_norm = position.normalize();
-        let converged_balances = pos_norm.component_mul(&divergence);
-        result[0].lr = converged_balances.x;
-        result[0].bf = converged_balances.y;
-        result[0].du = converged_balances.z;
+        result[0].lr = pos_norm.x;
+        result[0].bf = pos_norm.y;
+        result[0].du = pos_norm.z;
         let distance = position.magnitude();
         result[0].distance = distance;
     }
 }
 
-fn simd_abs<T: SimdRealField>(value: Vector3<T>) -> Vector3<T> {
-    let mut result = Vector3::zeros();
-    for (a, b) in result.iter_mut().zip(value.iter()) {
-        *a = b.simd_abs();
-    }
-    result
-}
+// fn simd_abs<T: SimdRealField>(value: Vector3<T>) -> Vector3<T> {
+//     let mut result = Vector3::zeros();
+//     for (a, b) in result.iter_mut().zip(value.iter()) {
+//         *a = b.simd_abs();
+//     }
+//     result
+// }
 impl<T, Law, D> DelaySamples for Processor<T, Law, D> {
     fn delay_samples(&self, sample_rate: u32) -> usize {
         calculate_delay_samples(self.max_itd_nanos, sample_rate)
@@ -206,24 +203,24 @@ where
     }
 }
 
-fn cuboid_solve<T: SimdRealField + Copy>(position: Vector3<T>, extent: Vector3<T>) -> Vector3<T> {
-    let position_abs = simd_abs(position);
-    let mut plus = position_abs + extent;
-    for i in plus.iter_mut() {
-        i.simd_max(T::zero());
-    }
-    let plus = simd_abs(plus.normalize());
-    let mut minus = position_abs - extent;
-    for i in minus.iter_mut() {
-        i.simd_max(T::zero());
-    }
-    let minus = simd_abs(minus.normalize());
-    let mut divergence = Vector3::zeros();
-    for ((plus, minus), d) in plus.iter().zip(minus.iter()).zip(divergence.iter_mut()) {
-        *d = plus.simd_min(*minus);
-    }
-    divergence
-}
+// fn cuboid_solve<T: SimdRealField + Copy>(position: Vector3<T>, extent: Vector3<T>) -> Vector3<T> {
+//     let position_abs = simd_abs(position);
+//     let mut plus = position_abs + extent;
+//     for i in plus.iter_mut() {
+//         i.simd_max(T::zero());
+//     }
+//     let plus = simd_abs(plus.normalize());
+//     let mut minus = position_abs - extent;
+//     for i in minus.iter_mut() {
+//         i.simd_max(T::zero());
+//     }
+//     let minus = simd_abs(minus.normalize());
+//     let mut divergence = Vector3::zeros();
+//     for ((plus, minus), d) in plus.iter().zip(minus.iter()).zip(divergence.iter_mut()) {
+//         *d = plus.simd_min(*minus);
+//     }
+//     divergence
+// }
 
 const NANOS_PER_SEC: u32 = 1_000_000_000;
 
