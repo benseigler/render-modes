@@ -3,6 +3,7 @@ use xpans_render::input::{FractionalInput, SampleRate};
 use crate::Interpretation;
 
 pub mod no_hrtf;
+pub mod sofa;
 
 /// Possibly applies delay, filtering, etc. on input samples
 pub trait Hrtf<T, I>
