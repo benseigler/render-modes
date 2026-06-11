@@ -2,9 +2,11 @@
 Implementation of xpans' Headphones rendering mode
 */
 pub mod distance;
+pub mod hrtf;
 pub mod pan_law;
 
 use crate::distance::{DistanceCurve, normalize_distance};
+use crate::hrtf::Hrtf;
 use crate::pan_law::PanLaw;
 use core::marker::PhantomData;
 use nalgebra::{SimdRealField, Vector3};
@@ -29,7 +31,8 @@ impl<T> Interpreter<T> {
 
 /// The sample processor for the headphone rendering mode.
 #[derive(Default)]
-pub struct Processor<T, Law, D> {
+pub struct Processor<T, Law, D, H> {
+    hrtf: H,
     max_itd_nanos: u32,
     distance_curve: D,
     distance_effect: T,
@@ -37,9 +40,10 @@ pub struct Processor<T, Law, D> {
     max_distance: T,
     pan_law: Law,
 }
-impl<T: Float, Law, D: DistanceCurve<T>> Processor<T, Law, D> {
+impl<T: Float, Law, D: DistanceCurve<T>, H> Processor<T, Law, D, H> {
     /// Creates a new headphone sample processor.
     pub fn new(
+        hrtf: H,
         pan_law: Law,
         max_itd_nanos: u32,
         distance_curve: D,
@@ -48,6 +52,7 @@ impl<T: Float, Law, D: DistanceCurve<T>> Processor<T, Law, D> {
         max_distance: T,
     ) -> Self {
         Self {
+            hrtf,
             pan_law,
             max_itd_nanos,
             distance_curve,
@@ -97,6 +102,15 @@ impl<T: Float, Law, D: DistanceCurve<T>> Processor<T, Law, D> {
     }
     fn apply_distance_curve(&self, distance: T) -> T {
         self.distance_curve.distance_curve(distance)
+    }
+    pub fn hrtf(&self) -> &H {
+        &self.hrtf
+    }
+    pub fn hrtf_mut(&mut self) -> &mut H {
+        &mut self.hrtf
+    }
+    pub fn set_hrtf(&mut self, hrtf: H) {
+        self.hrtf = hrtf;
     }
 }
 
@@ -159,19 +173,20 @@ where
 //     }
 //     result
 // }
-impl<T, Law, D> DelaySamples for Processor<T, Law, D> {
+impl<T, Law, D, H> DelaySamples for Processor<T, Law, D, H> {
     fn delay_samples(&self, sample_rate: u32) -> usize {
         calculate_delay_samples(self.max_itd_nanos, sample_rate)
     }
 }
-impl<T, Law, D> OutputChannels for Processor<T, Law, D> {
+impl<T, Law, D, H> OutputChannels for Processor<T, Law, D, H> {
     fn output_channels(&self) -> usize {
         2
     }
 }
 
-impl<T, Law, In, Out, D> ProcessSamples<In, Out> for Processor<T, Law, D>
+impl<T, Law, In, Out, D, H> ProcessSamples<In, Out> for Processor<T, Law, D, H>
 where
+    Self: Hrtf<T, In>,
     Law: PanLaw<T>,
     In: FractionalInput<T, T> + SampleRate,
     Out: Output<T>,
@@ -183,16 +198,9 @@ where
 
     fn process_samples(&mut self, result: &[Interpretation<T>], input: &In, output: &mut Out) {
         let result = result[0];
-        let current_sample = input.current_sample();
-        let max_itd: T = self.max_itd_nanos().as_();
-        let delay_ns = (result.lr * max_itd).abs();
-        let sample_rate = input.sample_rate();
-        let delay_samples = nanos_to_samples(delay_ns, sample_rate);
-        let delayed_sample = input.fractional_sample(delay_samples);
-        let sample_pair = [current_sample, delayed_sample];
+        let sample_pair = self.get_samples(&result, input);
         for channel in 0u8..2 {
-            let is_delayed_channel = (channel == 0) == result.lr.is_sign_positive();
-            let sample = sample_pair[is_delayed_channel as usize];
+            let sample = sample_pair[channel as usize];
             let distance = self.normalize_distance(result.distance);
             let dm = self.apply_distance_curve(distance) * self.distance_effect();
             let divergence = T::one() - dm;
@@ -201,6 +209,21 @@ where
             output.set_channel(usize::from(channel), sample * gain_attenuated);
         }
     }
+}
+
+fn get_delay_samples<T>(
+    max_itd_nanos: u32,
+    result: &Interpretation<T>,
+    input: &impl SampleRate,
+) -> T
+where
+    T: Float + 'static,
+    u32: AsPrimitive<T>,
+{
+    let max_itd: T = max_itd_nanos.as_();
+    let delay_ns = (result.lr * max_itd).abs();
+    let sample_rate = input.sample_rate();
+    nanos_to_samples(delay_ns, sample_rate)
 }
 
 // fn cuboid_solve<T: SimdRealField + Copy>(position: Vector3<T>, extent: Vector3<T>) -> Vector3<T> {
