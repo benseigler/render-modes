@@ -27,6 +27,12 @@ impl Sofa {
         }
     }
 }
+#[cfg(test)]
+#[test]
+fn sofa_loads() {
+    let _sofa = Sofa::new();
+}
+
 impl<T, I, D, Law> Hrtf<T, I> for Processor<T, Law, D, Sofa>
 where
     T: Float + Zero + AsPrimitive<f32> + AddAssign,
