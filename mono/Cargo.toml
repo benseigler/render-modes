@@ -10,4 +10,4 @@ repository = "https://github.com/xpans-audio/render-modes.git"
 authors = ["Ben Seigler"]
 
 [dependencies]
-xpans_render = "0.1.2"
+xpans_render = { git = "https://github.com/xpans-audio/xpans_render.git" }

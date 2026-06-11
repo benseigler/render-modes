@@ -11,7 +11,7 @@ authors = ["Ben Seigler"]
 
 [dependencies]
 xpans = "0.1.0"
-xpans_render = "0.1.2"
+xpans_render = { git = "https://github.com/xpans-audio/xpans_render.git" }
 xpans_common_lr = { version = "0.1.2", path = "../common/lr" }
 nalgebra = "0.34.0"
 num = "0.4.3"

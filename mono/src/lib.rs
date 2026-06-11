@@ -14,7 +14,7 @@ impl InterpretationLength for Interpreter {
 impl<Source> InterpretSource<Source> for Interpreter {
     type Interpretation = ();
 
-    fn interpret_source(&self, _source: &Source, _result: &mut [Self::Interpretation]) {}
+    fn interpret_source(&mut self, _source: &Source, _result: &mut [Self::Interpretation]) {}
 }
 
 /// The sample processor for the mono rendering mode.
@@ -64,7 +64,7 @@ where
 {
     type Interpretation = ();
 
-    fn process_samples(&self, _result: &[Self::Interpretation], input: &In, output: &mut Out) {
+    fn process_samples(&mut self, _result: &[Self::Interpretation], input: &In, output: &mut Out) {
         let sample = input.current_sample();
         for channel in 0..self.output_channels() {
             output.set_channel(channel, sample);

@@ -140,7 +140,7 @@ where
 {
     type Interpretation = Interpretation<T>;
 
-    fn interpret_source(&self, source: &Source, result: &mut [Self::Interpretation]) {
+    fn interpret_source(&mut self, source: &Source, result: &mut [Self::Interpretation]) {
         let position = Vector3::new(source.pos_x(), source.pos_y(), source.pos_z());
 
         let pos_norm = position.normalize();
@@ -181,7 +181,7 @@ where
 {
     type Interpretation = Interpretation<T>;
 
-    fn process_samples(&self, result: &[Interpretation<T>], input: &In, output: &mut Out) {
+    fn process_samples(&mut self, result: &[Interpretation<T>], input: &In, output: &mut Out) {
         let result = result[0];
         let current_sample = input.current_sample();
         let max_itd: T = self.max_itd_nanos().as_();

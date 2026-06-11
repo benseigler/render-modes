@@ -34,7 +34,7 @@ where
 {
     type Interpretation = T;
 
-    fn interpret_source(&self, source: &Source, result: &mut [Self::Interpretation]) {
+    fn interpret_source(&mut self, source: &Source, result: &mut [Self::Interpretation]) {
         let position = Vector3::new(source.pos_x(), source.pos_y(), source.pos_z());
         let extent = Vector3::new(source.ext_x(), source.ext_y(), source.ext_z());
         let bal_unclamped = (position.x.simd_abs() - extent.x)
@@ -69,7 +69,7 @@ where
     type Interpretation = T;
 
     /// NOTE: Extent has only been clumsily and incorrectly implemented.
-    fn interpret_source(&self, source: &Source, result: &mut [Self::Interpretation]) {
+    fn interpret_source(&mut self, source: &Source, result: &mut [Self::Interpretation]) {
         let position = Vector3::new(source.pos_x(), source.pos_y(), source.pos_z());
         let extent = Vector3::new(source.ext_x(), source.ext_y(), source.ext_z());
         let divergence = directional_cuboid_solve(position, extent);
@@ -151,7 +151,7 @@ where
 {
     type Interpretation = T;
 
-    fn process_samples(&self, result: &[T], input: &In, output: &mut Out) {
+    fn process_samples(&mut self, result: &[T], input: &In, output: &mut Out) {
         for channel in 0..2u8 {
             let gain = gain(channel, result[0]);
             let attenuated = self.pan_law.attenuate(gain);
