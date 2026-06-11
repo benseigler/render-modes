@@ -6,7 +6,7 @@ use xpans_render::input::{FractionalInput, SampleRate};
 
 use crate::{Interpretation, Processor, get_delay_samples, hrtf::Hrtf};
 
-const HRTF: &[u8] = include_bytes!("hrtfs/HRIR_CIRC360.sofa");
+const HRTF: &[u8] = include_bytes!("hrtfs/HRIR_L2702_NF050.sofa");
 
 pub struct Sofa {
     sofa: Sofar,
